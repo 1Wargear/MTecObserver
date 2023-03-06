@@ -3,54 +3,92 @@
 int programCount;
 program_t *programs;
 
-thread_t* threads;
-int threadCount;
+thread_t* ct;
+thread_t threads[MAX_THREADS];
 
 void registerPrograms(program_t *progs, int length)
 {
-    programCount = length;
-    programs = progs;
+  programCount = length;
+  programs = progs;
+
+  //Init Threads
+  for(int i = 0; i < MAX_THREADS; i++)
+  {
+    threads[i].stack = NULL;
+    threads[i].status = TS_DONE;
+  }
 }
 
 HANDLE_t startProgram(static_id_param_t programName)
 {
-    for (int i = 0; i < programCount; i++)
-    {
-        if(mto_sidcmp(&(programs[i].name.name[0]), programName))
-        {
-            programs[i].entry_ptr();
-            break;
-        }
-    }
-    
-    return NULL_HANDLE;
-}
-
-void resume(void)
-{
-    //save params before stack switching
-    p->c = c;
-    p->f = f;
-    p->arg = arg;
-    get_sp(p->old_sp);
-    get_fp(p->old_fp);
-
-    set_sp(p - FRAME_SZ);
-    set_fp(p); 
-    get_fp(p);
-
-  //and now we read our params from p
-  if(!setjmp(p->c->callee_context)) {
-    set_sp(p->old_sp);
-    set_fp(p->old_fp);
-    return;
+  program_t* program = NULL;
+  for (int i = 0; i < programCount; i++)
+  {
+      if(mto_sidcmp(&(programs[i].name.cstr[0]), programName))
+      {
+          program = &programs[i];
+          break;
+      }
   }
-  (*p->f)(p->arg);
-  longjmp(p->c->caller_context, 0);
+
+  if(program == NULL)
+    return NULL_HANDLE;
+
+  thread_t* myThread = NULL;
+  for(int i = 0; i < MAX_THREADS; i++)
+  {
+    if(threads[i].status == TS_DONE)
+    {
+      myThread = &threads[i];
+      myThread->ep = program->entry_ptr;
+      break;
+    }
+  }
+
+  if(myThread == NULL)
+    return NULL_HANDLE;
+
+  if(!setjmp(myThread->callee_context))
+  {
+    myThread->status = TS_WAITING;
+    return 1;
+  }
+
+  //----------------Current Thread----------------------------
+
+  ct->ep();
+  ct->status = TS_DONE;
+
+  longjmp(ct->caller_context, TS_DONE);
+    
+  return NULL_HANDLE;
 }
 
-void yield(void)
+#include <LiquidCrystal_I2C.h>
+extern LiquidCrystal_I2C lcd;
+
+void update(void)
 {
-  (*p->f)(p->arg);
-  longjmp(p->c->caller_context, 0);
+  for(int i = 0; i < MAX_THREADS; i++)
+  {
+    if(threads[i].status == TS_WAITING)
+    {
+      ct = &threads[i];
+      ct->status = TS_RUNNING;
+      thread_resume();
+
+      if(ct->status == TS_RUNNING)
+        ct->status = TS_WAITING;
+    }
+  }
+}
+
+inline void thread_resume(void)
+{
+  int ret = setjmp(ct->caller_context);
+  if(!ret) 
+  {
+    get_sp(ct->sp);
+    longjmp(ct->callee_context, 1);
+  }
 }

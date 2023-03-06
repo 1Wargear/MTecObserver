@@ -2,19 +2,32 @@
 
 #ifdef WIN32
 #include <stdio.h>
+#include <stdlib.h>
 #endif // !WIN32
+#ifdef ARDUINO
+#include <stdio.h>
+#include <stdlib.h>
+#endif // !WIN32
+
+#include <Arduino.h>
 
 stream_t* streams;
 uint8_t streamsSize;
 
-const version_t VERSION = {0x00};
+const version_t MTO_VERSION = {0,1,0,0};
+
+#define HADDR(h) h -1
+
+#define SINDEX streams[HADDR(handle)]
+#define SDATA SINDEX.data
 
 HANDLE_t createHandle(stream_t *streamable)
 {
     if(streams == NULL)
     {
-        streams = mto_alloc(NULL, sizeof(stream_t));
-        zero(streams, sizeof(stream_t));
+        streams = (stream_t*)mto_alloc(NULL, sizeof(stream_t)*10);
+        zero(streams, sizeof(stream_t) * 10);
+        streamsSize = 10;
     }
 
     for (int i = 0; i < streamsSize; i++)
@@ -22,30 +35,47 @@ HANDLE_t createHandle(stream_t *streamable)
         if(is_zero(&(streams[i]), sizeof(stream_t)))
         {
             mto_memcpy(streamable, &streams[i], sizeof(stream_t));
-            return i;
+            return i + 1;
         }
     }
 
-    if(mto_alloc(streams, sizeof(stream_t) * ++streamsSize) == NULL)
-        return NULL_HANDLE;
+    // stream_t* newStremas = (stream_t*)mto_alloc(streams, sizeof(stream_t) * ++streamsSize);
+    // if(newStremas  == NULL)
+    //     return NULL_HANDLE;
 
-    mto_memcpy(streamable, &streams[streamsSize - 1], sizeof(stream_t));
-    return streamsSize - 1;
+    // mto_memcpy(streams, newStremas, sizeof(stream_t) * streamsSize);
+    // mto_alloc(streams, 0);
+    // streams = newStremas;
+
+    // mto_memcpy(streamable, &streams[streamsSize - 1], sizeof(stream_t));
+    // return streamsSize;
+    return NULL_HANDLE;
 }
+
+#include <LiquidCrystal_I2C.h>
+extern LiquidCrystal_I2C lcd;
 
 void free_handle(HANDLE_t handle)
 {
-    zero(&streams[handle], sizeof(stream_t));
+    if(!checkHandle(handle))
+        return;
 
-    if(handle == streamsSize - 1)
-    {
-        mto_alloc(streams, sizeof(stream_t) * --streamsSize);
-    }
+    if(SINDEX.close_ptr != NULL)
+        SINDEX.close_ptr(SDATA);
+
+    zero(&streams[HADDR(handle)], sizeof(stream_t));
+
+    // if(handle == streamsSize)
+    // {
+    //     int newSize = sizeof(stream_t) * --streamsSize;
+    //     stream_t* newStreams = (stream_t*)mto_alloc(streams, newSize);
+    //     mto_memcpy(streams, newStreams, sizeof(stream_t) * streamsSize);
+    //     mto_alloc(streams, 0);
+    //     streams = newStreams;
+    // }
 }
 
-#define SINDEX streams[handle]
-
-int read(HANDLE_t handle, void* buffer, int offset, int length)
+int mto_read(HANDLE_t handle, void* buffer, int offset, int length)
 {
     if(!checkHandle(handle))
         return 0;
@@ -53,10 +83,10 @@ int read(HANDLE_t handle, void* buffer, int offset, int length)
     if(SINDEX.read_ptr == NULL)
         return 0;
 
-    return SINDEX.read_ptr(buffer, offset, length);
+    return SINDEX.read_ptr(buffer, offset, length, SDATA);
 }
 
-int write(HANDLE_t handle, void* buffer, int offset, int length)
+int mto_write(HANDLE_t handle, const void* buffer, int offset, int length)
 {
     if(!checkHandle(handle))
         return 0;
@@ -64,10 +94,10 @@ int write(HANDLE_t handle, void* buffer, int offset, int length)
     if(SINDEX.write_ptr == NULL)
         return 0;
 
-    return SINDEX.write_ptr(buffer, offset, length);
+    return SINDEX.write_ptr(buffer, offset, length, SDATA);
 }
 
-int seek(HANDLE_t handle, int length)
+int mto_seek(HANDLE_t handle, int length)
 {
     if(!checkHandle(handle))
         return 0;
@@ -75,10 +105,10 @@ int seek(HANDLE_t handle, int length)
     if(SINDEX.seek_ptr == NULL)
         return 0;
 
-    return SINDEX.seek_ptr(length);
+    return SINDEX.seek_ptr(length, SDATA);
 }
 
-int tell(HANDLE_t handle)
+int mto_tell(HANDLE_t handle)
 {
     if(!checkHandle(handle))
         return 0;
@@ -86,10 +116,10 @@ int tell(HANDLE_t handle)
     if(SINDEX.tell_ptr == NULL)
         return 0;
 
-    return SINDEX.tell_ptr();
+    return SINDEX.tell_ptr(SDATA);
 }
 
-int flush(HANDLE_t handle)
+int mto_flush(HANDLE_t handle)
 {
     if(!checkHandle(handle))
         return 0;
@@ -97,7 +127,7 @@ int flush(HANDLE_t handle)
     if(SINDEX.flush_ptr == NULL)
         return 0;
 
-    return SINDEX.flush_ptr();
+    return SINDEX.flush_ptr(SDATA);
 }
 
 inline BOOLEAN checkHandle(HANDLE_t handle)
@@ -113,16 +143,12 @@ inline BOOLEAN checkHandle(HANDLE_t handle)
 
 void* mto_alloc(void* ptr, int size)
 {
-    #ifdef WIN32
     return realloc(ptr, size);
-    #endif // !WIN32
 }
 
-void* mto_memcpy(void* src, void* const dst, int length)
+void* mto_memcpy(const void* src, void* dst, int length)
 {
-    #ifdef WIN32
-    return memcpy(src, dst, length);
-    #endif // !WIN32
+    return memcpy(dst, src, length);
 }
 
 BOOLEAN mto_sidcmp(static_id_param_t a, static_id_param_t b)

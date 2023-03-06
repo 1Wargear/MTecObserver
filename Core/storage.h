@@ -7,10 +7,12 @@ typedef struct storage_driver_t
 {
     uint16_t supportedStorageTypes;
 
+    void (*init)(void);
+
     HANDLE_t (*addEntry_ptr)(HANDLE_t instance, static_id_param_t name);
     HANDLE_t (*getEntry_ptr)(HANDLE_t instance, static_id_param_t name);
     int (*removeEntry_ptr)(HANDLE_t instance, static_id_param_t name);
-    int (*listEntries_ptr)(HANDLE_t instance, static_id_t* buffer, int length);
+    int (*listEntries_ptr)(HANDLE_t instance, static_id_t* buffer, int offset, int length);
 
     HANDLE_t (*createInstance_ptr)(uint16_t storageType);
 
@@ -44,7 +46,7 @@ void registerStorageDriver(storage_driver_t* storageDrivers, uint8_t size);
 HANDLE_t addEntry(HANDLE_t storage, static_id_param_t name);
 HANDLE_t getEntry(HANDLE_t storage, static_id_param_t name);
 int removeEntry(HANDLE_t storage, static_id_param_t name);
-int listEntries(HANDLE_t storage, static_id_t* buffer, int length);
+int listEntries(HANDLE_t storage, static_id_t* buffer, int offset, int length);
 
 HANDLE_t getStorage(storage_type_t storageType, uint16_t *size);
 #endif // !MTO_STORAGE

@@ -7,12 +7,15 @@ void registerStorageDriver(storage_driver_t* storageDrivers, uint8_t size)
 {
     drivers = storageDrivers;
     driverCount = size;
+
+    for (uint8_t i = 0; i < driverCount; i++)
+        drivers[i].init();
 }
 
 HANDLE_t addEntry(HANDLE_t storage, static_id_param_t name)
 {
     storage_info_t info;
-    if(!read(storage, &info, 0, sizeof(info)))
+    if(!mto_read(storage, &info, 0, sizeof(info)))
         return NULL_HANDLE;
     
     return drivers[info.driver].addEntry_ptr(storage, name);
@@ -21,7 +24,7 @@ HANDLE_t addEntry(HANDLE_t storage, static_id_param_t name)
 HANDLE_t getEntry(HANDLE_t storage, static_id_param_t name)
 {
     storage_info_t info;
-    if(!read(storage, &info, 0, sizeof(info)))
+    if(!mto_read(storage, &info, 0, sizeof(info)))
         return NULL_HANDLE;
     
     return drivers[info.driver].getEntry_ptr(storage, name);
@@ -30,19 +33,19 @@ HANDLE_t getEntry(HANDLE_t storage, static_id_param_t name)
 int removeEntry(HANDLE_t storage, static_id_param_t name)
 {
     storage_info_t info;
-    if(!read(storage, &info, 0, sizeof(info)))
+    if(!mto_read(storage, &info, 0, sizeof(info)))
         return NULL_HANDLE;
     
     return drivers[info.driver].removeEntry_ptr(storage, name);
 }
 
-int listEntries(HANDLE_t storage, static_id_t* buffer, int length)
+int listEntries(HANDLE_t storage, static_id_t* buffer, int offset, int length)
 {
     storage_info_t info;
-    if(!read(storage, &info, 0, sizeof(info)))
+    if(!mto_read(storage, &info, 0, sizeof(info)))
         return NULL_HANDLE;
     
-    return drivers[info.driver].listEntries_ptr(storage, buffer, length);
+    return drivers[info.driver].listEntries_ptr(storage, buffer, offset, length);
 }
 
 HANDLE_t getStorage(storage_type_t storageType, uint16_t *size)
@@ -57,14 +60,17 @@ HANDLE_t getStorage(storage_type_t storageType, uint16_t *size)
                 break;
 
             storage_info_t info;
-            if(!read(handle, &info, 0, sizeof(info)))
+            if(!mto_read(handle, &info, 0, sizeof(info)))
                 return NULL_HANDLE;
 
-            *size = info.size;
             info.driver = i;
             info.type = storageType;
+            mto_write(handle, &info, 0, sizeof(info));
+            info.size= listEntries(handle, NULL, 0, 0xFF);
+            mto_write(handle, &info, 0, sizeof(info));
 
-            write(handle, &info, 0, sizeof(info));
+            if(size != NULL)
+                *size = info.size;
 
             return handle;
         }

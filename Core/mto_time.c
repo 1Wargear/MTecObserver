@@ -1,4 +1,4 @@
-#include "time.h"
+#include "mto_time.h"
 #include "storage.h"
 
 time_driver_t* driver;
@@ -6,11 +6,12 @@ time_driver_t* driver;
 void registerTimeDriver(time_driver_t *timeDriver)
 {
     driver = timeDriver;
+    driver->init();
 }
 
 time_stamp_t getCurrentTime(void)
 {
-    return driver->getCurrentTime();
+    return driver->getTime();
 }
 
 void setTime(time_stamp_t currentTime)
@@ -28,7 +29,7 @@ BOOLEAN getAlarm(alarm_t* alarm)
     HANDLE_t entry = getEntry(storage, CURR_ALARM_ID);
     if(entry != NULL_HANDLE)
     {
-        if(read(entry, alarm, 0, sizeof(alarm_t)));
+        if(mto_read(entry, alarm, 0, sizeof(alarm_t)));
             rv = TRUE;
     }
 
@@ -38,15 +39,15 @@ BOOLEAN getAlarm(alarm_t* alarm)
     return rv;
 }
 
-void setAlarm(alarm_t alarm)
+void setAlarm(alarm_t* alarm)
 {
-    driver->setAlarm(alarm.timeStamp);
+    driver->setAlarm(alarm->timeStamp);
 }
 
 void setAlarm_M(static_id_t name, time_stamp_t timeStamp, D_ACTION)
 {
     alarm_t alarm = {name, timeStamp, fun_ptr};
-    setAlarm(alarm);
+    setAlarm(&alarm);
 
     uint16_t storageSize;
     HANDLE_t storage = getStorage(ST_TMP, &storageSize);
@@ -55,7 +56,7 @@ void setAlarm_M(static_id_t name, time_stamp_t timeStamp, D_ACTION)
     if(entry == NULL_HANDLE)
         entry = addEntry(storage, CURR_ALARM_ID);
 
-    write(entry, &alarm, 0, sizeof(alarm_t));
+    mto_write(entry, &alarm, 0, sizeof(alarm_t));
     
     free_handle(entry);
     free_handle(storage);
