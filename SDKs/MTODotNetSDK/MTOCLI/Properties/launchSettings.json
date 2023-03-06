@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MTOCLI": {
+      "commandName": "Project",
+      "commandLineArgs": "connect -c SerialPort -d COM5"
+    }
+  }
+}
